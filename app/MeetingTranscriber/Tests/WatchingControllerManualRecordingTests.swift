@@ -70,7 +70,8 @@ final class WatchingControllerManualRecordingTests: XCTestCase {
         )
         addTeardownBlock { await controller.stopManualRecording() }
 
-        controller.startManualRecording(pid: 1234, appName: "Chrome", title: "Standup")
+        // Keep the mocked target alive: the real monitor stops a nonexistent PID immediately.
+        controller.startManualRecording(pid: getpid(), appName: "Chrome", title: "Standup")
         // Wait for the report, not for `isManualRecording`: the loop sets that
         // inside the start, one statement before the notification, so waiting
         // on it can win the race and read an empty list.
