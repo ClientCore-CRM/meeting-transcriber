@@ -22,12 +22,27 @@ final class BoostyUploadQueue {
     private var captureWatcher: Task<Void, Never>?
     private var pumping = false
     private var requestingStart: Set<UUID> = []
+    private var retiring: Set<UUID> = []
+    private let activeAccount: () -> BoostyCredential?
+    private let credentialLookup: (String) -> BoostyCredential?
+    private let makeClient: (String) throws -> BoostyAPIClient
     private var preparing: Set<UUID> = []
     private var videoRecorders: [UUID: MeetingWindowRecorder] = [:]
     private var videoStarts: [UUID: Task<Void, Never>] = [:]
     private var videoStops: [UUID: Task<Void, Never>] = [:]
 
-    init(root: URL) {
+    init(
+        root: URL,
+        activeAccount: @escaping () -> BoostyCredential? = {
+            let connection = BoostyConnectionState.shared
+            return connection.uploadEnabled ? connection.credential : nil
+        },
+        credentialLookup: @escaping (String) -> BoostyCredential? = { BoostyConnectionState.shared.credential(for: $0) },
+        makeClient: @escaping (String) throws -> BoostyAPIClient = { try BoostyAPIClient(origin: $0) },
+    ) {
+        self.activeAccount = activeAccount
+        self.credentialLookup = credentialLookup
+        self.makeClient = makeClient
         store = BoostyUploadStore(root: root)
         do {
             entries = try store.load()
@@ -38,11 +53,34 @@ final class BoostyUploadQueue {
         } catch { storageError = "The upload queue could not be recovered. Its media files have been kept." }
     }
 
+    isolated deinit {
+        worker?.cancel()
+        captureWatcher?.cancel()
+    }
+
+    /// Persist routing before exposing the new account in the menu. Local media and capture ID stay unchanged.
+    func retargetCurrentCaptures(to credential: BoostyCredential, at date: Date = Date()) throws {
+        guard storageError == nil else { throw BoostyError.invalidResponse }
+        var revised = entries
+        for index in revised.indices where revised[index].captureStoppedAt == nil && revised[index].accountKey != credential.accountKey {
+            try revised[index].retarget(to: credential, at: date)
+        }
+        try store.save(revised)
+        entries = revised
+        Task {
+            for entry in entries where entry.captureStoppedAt == nil {
+                await requestStart(entry.id)
+            }
+            await closeRetiredCaptures()
+        }
+    }
+
     func resume() {
         guard worker == nil, storageError == nil else { return }
         captureWatcher = Task { [weak self] in
             while !Task.isCancelled {
                 if let self {
+                    await closeRetiredCaptures()
                     for entry in entries where entry.stopAcknowledged != true {
                         if entry.serverRecordingId == nil { await requestStart(entry.id) }
                         await observeCapture(entry.id)
@@ -70,8 +108,7 @@ final class BoostyUploadQueue {
     }
 
     func begin(pid: pid_t?, title: String, startedAt: Date, stagingStem: String?) -> UUID? {
-        let connection = BoostyConnectionState.shared
-        guard worker != nil, storageError == nil, connection.uploadEnabled, let credential = connection.credential else { return nil }
+        guard worker != nil, storageError == nil, let credential = activeAccount(), credential.expiresAt > Date() else { return nil }
         let id = UUID()
         let hostStart: Double? = nil
         let entry = BoostyUploadEntry(
@@ -162,7 +199,7 @@ final class BoostyUploadQueue {
             let credential = try activeCredential(for: entry)
             if entry.captureStoppedAt == nil { mutate(id) { $0.lastCaptureAt = Date() } }
             struct CaptureState: Encodable { let stoppedAt: Date? }
-            let client = try BoostyAPIClient(origin: entry.origin)
+            let client = try makeClient(entry.origin)
             let state: BoostyRecordingState = try await client.send(
                 path: "/api/desktop/recordings/\(serverId)/capture-state",
                 method: "POST",
@@ -170,31 +207,32 @@ final class BoostyUploadQueue {
                 body: BoostyAPIClient.encoder().encode(CaptureState(stoppedAt: entry.captureStoppedAt)),
             )
             mutate(id) { draft in
+                guard draft.route == entry.route else { return }
                 draft.botStatus = state.botStatus
                 if entry.captureStoppedAt != nil { draft.stopAcknowledged = true }
             }
         } catch {
-            mutate(id) { $0.botStatus = "Cancellation not confirmed: \(error.localizedDescription)" }
+            mutate(id) { if $0.route == entry.route { $0.botStatus = "Cancellation not confirmed: \(error.localizedDescription)" } }
         }
     }
 
     private func activeCredential(for entry: BoostyUploadEntry) throws -> BoostyCredential {
-        guard BoostyConnectionState.shared.uploadEnabled,
-              let credential = BoostyConnectionState.shared.credential,
+        guard let credential = credentialLookup(entry.accountKey),
               credential.accountKey == entry.accountKey, credential.origin == entry.origin,
               credential.expiresAt > Date() else { throw BoostyError.disconnected }
         return credential
     }
 
     func requestStart(_ id: UUID) async {
-        guard !requestingStart.contains(id), let entry = entries.first(where: { $0.id == id }) else { return }
-        requestingStart.insert(id)
-        defer { requestingStart.remove(id) }
+        guard let entry = entries.first(where: { $0.id == id }), !requestingStart.contains(entry.route.clientRecordingId) else { return }
+        let route = entry.route
+        requestingStart.insert(route.clientRecordingId)
+        defer { requestingStart.remove(route.clientRecordingId) }
         do {
             let credential = try activeCredential(for: entry)
-            let client = try BoostyAPIClient(origin: entry.origin)
+            let client = try makeClient(entry.origin)
             let body = BoostyStart(
-                clientRecordingId: id,
+                clientRecordingId: route.clientRecordingId,
                 startedAt: entry.startedAt,
                 meetingId: entry.selectedMeetingId,
                 meetingUrl: entry.meetingURL,
@@ -206,13 +244,9 @@ final class BoostyUploadQueue {
                 body: BoostyAPIClient.encoder().encode(body),
             )
             guard UUID(uuidString: result.recordingId) != nil else { throw BoostyError.invalidResponse }
-            mutate(id) { draft in
-                draft.serverRecordingId = result.recordingId
-                draft.botStatus = result.botStatus
-                draft.candidates = result.candidates ?? []
-            }
+            mutate(id) { $0.acceptStart(result, for: route) }
         } catch {
-            mutate(id) { $0.botStatus = "Not confirmed: \(error.localizedDescription)" }
+            mutate(id) { if $0.route == route { $0.botStatus = "Not confirmed: \(error.localizedDescription)" } }
         }
     }
 
@@ -319,7 +353,7 @@ final class BoostyUploadQueue {
         }
         let credential = try activeCredential(for: entry)
         guard let serverId = entry.serverRecordingId else { throw BoostyError.invalidResponse }
-        let client = try BoostyAPIClient(origin: entry.origin)
+        let client = try makeClient(entry.origin)
         let path = "/api/desktop/recordings/\(serverId)"
         var state: BoostyRecordingState = try await client.send(path: path, token: credential.deviceToken)
         mutate(id) { $0.botStatus = state.botStatus }
@@ -375,6 +409,52 @@ final class BoostyUploadQueue {
             draft.status = missing.isEmpty ? "Saved in Boosty" : "Saved partially; missing: \(missing.joined(separator: ", "))"
             draft.receiptURL = state.receipt.url
             draft.botStatus = state.botStatus
+        }
+    }
+}
+
+extension BoostyUploadQueue {
+    /// Retired routes never enter upload(). Replaying start is idempotent, recovering a lost start response.
+    func closeRetiredCaptures() async {
+        for entry in entries {
+            for retired in entry.retiredCaptures ?? [] {
+                guard !retiring.contains(retired.id) else { continue }
+                retiring.insert(retired.id)
+                defer { retiring.remove(retired.id) }
+                do {
+                    guard let credential = credentialLookup(retired.route.accountKey),
+                          credential.accountKey == retired.route.accountKey, credential.origin == retired.route.origin,
+                          credential.expiresAt > Date() else { continue }
+                    let client = try makeClient(retired.route.origin)
+                    var serverID = retired.serverRecordingId
+                    if serverID == nil {
+                        let started: BoostyRecordingState = try await client.send(
+                            path: "/api/desktop/recordings/start", method: "POST", token: credential.deviceToken,
+                            body: BoostyAPIClient.encoder().encode(BoostyStart(
+                                clientRecordingId: retired.id, startedAt: retired.startedAt,
+                                meetingId: retired.meetingId, meetingUrl: retired.meetingURL,
+                            )),
+                        )
+                        guard UUID(uuidString: started.recordingId) != nil else { throw BoostyError.invalidResponse }
+                        serverID = started.recordingId
+                        mutate(entry.id) { draft in
+                            if let index = draft.retiredCaptures?.firstIndex(where: { $0.id == retired.id }) {
+                                draft.retiredCaptures?[index].serverRecordingId = serverID
+                            }
+                        }
+                    }
+                    guard let serverID else { continue }
+                    struct Stopped: Encodable { let stoppedAt: Date }
+                    let _: BoostyRecordingState = try await client.send(
+                        path: "/api/desktop/recordings/\(serverID)/capture-state", method: "POST", token: credential.deviceToken,
+                        body: BoostyAPIClient.encoder().encode(Stopped(stoppedAt: retired.stoppedAt)),
+                    )
+                    mutate(entry.id) { $0.retiredCaptures?.removeAll { $0.id == retired.id } }
+                } catch {
+                    // Keep the scoped close operation durable; normal capture/upload continues in the new account.
+                    continue
+                }
+            }
         }
     }
 }

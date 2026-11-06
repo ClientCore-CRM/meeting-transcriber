@@ -47,8 +47,8 @@ struct BoostyPendingExport: Codable, Sendable {
 
 struct BoostyUploadEntry: Codable, Sendable, Identifiable {
     let id: UUID
-    let origin: String
-    let accountKey: String
+    var origin: String
+    var accountKey: String
     let title: String
     let startedAt: Date
     var audioHostStart: Double?
@@ -72,6 +72,8 @@ struct BoostyUploadEntry: Codable, Sendable, Identifiable {
     var nextAttempt = Date.distantPast
     var failures = 0
     var receiptURL: String?
+    var routingID: UUID?
+    var retiredCaptures: [BoostyRetiredCapture]? // swiftlint:disable:this discouraged_optional_collection
 }
 
 enum BoostyExportPolicy {

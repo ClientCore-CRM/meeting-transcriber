@@ -29,3 +29,13 @@ Settings → Output → LLM Provider supports **Codex CLI** and **Claude CLI**, 
 Codex runs non-interactively in a private temporary directory, with read-only sandboxing, user configuration/rules and session persistence disabled. Shell, browser, computer, plugin and multi-agent features are disabled. The transcript goes through stdin; only the final Markdown response is imported. Temporary input/output files are removed after success, failure or cancellation. Diagnostic output is discarded to avoid exposing meeting content. Failures preserve the transcript for retry. Use a recent Codex CLI supporting `exec --ignore-user-config`.
 
 Speech recognition remains local; the selected summary provider receives the transcript. Codex uses its current account/model defaults rather than an API key stored by this app.
+
+## Multiple Boosty accounts
+
+Settings → Boosty → Add another account keeps existing connections and lets you connect ClientCore, Retail Rocket, or another installation. Each grant remains in Keychain, separately scoped by installation and user. Switching is available in the first rows of the menu-bar menu; with multiple accounts, the status-bar icon shows CC/RR (or the installation host).
+
+Switching during an active local capture routes the entire meeting, including its already-recorded beginning, exclusively to the newly selected account without restarting local audio or video. The new account cancels its matching calendar bot; earlier remote capture sessions are closed using their original grants and never receive transcript, summary or media. Each switch uses a fresh remote session, including when switching back. Late responses cannot overwrite the new route.
+
+Completed captures keep their assigned accounts and upload independently of the current menu selection. Each account has its own upload toggle. Removing an account does not select another account automatically, revoke another grant, or delete local queued media; reconnect the removed account to resume its queue. The existing single-account connection and preference migrate without reauthentication.
+
+`bash scripts/boosty-account-checks.sh` runs production-source account/queue checks locally against a synthetic URLProtocol transport, including a delayed old-account response and an inactive account's upload. It never connects to real services or reads real grants. CI retains its existing XCTest/build workflow without additional steps.
