@@ -117,7 +117,7 @@ private struct BoostyUploadEntryView: View {
             }
             HStack {
                 Button("Retry") { uploads.retry(entry.id) }
-                if let path = entry.receiptURL, path.hasPrefix("/calls/"), let url = URL(string: entry.origin + path) {
+                if let path = entry.receiptUrl, path.hasPrefix("/calls/"), let url = URL(string: entry.origin + path) {
                     Link("Open in Boosty", destination: url)
                 }
             }

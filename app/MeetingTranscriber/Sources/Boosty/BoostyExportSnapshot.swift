@@ -64,15 +64,15 @@ struct BoostyUploadEntry: Codable, Sendable, Identifiable {
     var warnings: [String] = []
     var snapshot: BoostyExportSnapshot?
     var pendingExport: BoostyPendingExport?
-    var meetingURL: String?
+    var meetingUrl: String?
     var captureStoppedAt: Date?
     var lastCaptureAt: Date?
     var stopAcknowledged: Bool? // swiftlint:disable:this discouraged_optional_boolean
     var uploadedRevision: Int?
     var nextAttempt = Date.distantPast
     var failures = 0
-    var receiptURL: String?
-    var routingID: UUID?
+    var receiptUrl: String?
+    var routingId: UUID?
     var retiredCaptures: [BoostyRetiredCapture]? // swiftlint:disable:this discouraged_optional_collection
 }
 
