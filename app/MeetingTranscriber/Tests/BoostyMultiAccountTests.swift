@@ -58,7 +58,7 @@ final class BoostyMultiAccountTests: XCTestCase {
         try withStore { store, defaults, secrets in
             let cc = credential("https://meets.clientcore.ru")
             let oldKey = SHA256.hash(data: Data(cc.accountKey.utf8)).map { String(format: "%02x", $0) }.joined()
-            secrets.write(BoostyAPIClient.encoder().encode(cc), for: oldKey)
+            try secrets.write(BoostyAPIClient.encoder().encode(cc), for: oldKey)
             defaults.set(oldKey, forKey: "boosty.activeAccount")
             defaults.set(false, forKey: "boosty.uploadEnabled")
             XCTAssertEqual(store.accounts.first?.id, cc.accountKey)
@@ -91,7 +91,7 @@ final class BoostyMultiAccountTests: XCTestCase {
             try store.setUploadEnabled(accountKey: cc.accountKey, enabled: false)
             XCTAssertEqual(store.accounts.first { $0.id == rr.accountKey }?.uploadEnabled, true)
             let rrKey = SHA256.hash(data: Data(rr.accountKey.utf8)).map { String(format: "%02x", $0) }.joined()
-            secrets.write(BoostyAPIClient.encoder().encode(cc), for: rrKey)
+            try secrets.write(BoostyAPIClient.encoder().encode(cc), for: rrKey)
             XCTAssertNil(store.load(accountKey: rr.accountKey))
         }
     }
