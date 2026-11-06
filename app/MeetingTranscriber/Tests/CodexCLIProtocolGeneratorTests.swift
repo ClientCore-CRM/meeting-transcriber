@@ -72,7 +72,7 @@
         func testProviderAndBinaryPersist() throws {
             let suite = "CodexProviderTests.\(UUID().uuidString)"
             let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-            defer { defaults.removePersistentDomain(forName: suite) }
+            defer { DefaultsSuite.remove(suite) }
             let settings = AppSettings(defaults: defaults, apiKeyAccount: suite, claudeAPIKeyAccount: suite + ".claude")
             settings.protocolProvider = .codexCLI
             settings.codexBin = "/custom/codex"
