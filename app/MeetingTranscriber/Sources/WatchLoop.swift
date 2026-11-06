@@ -112,6 +112,7 @@ class WatchLoop {
 
     /// Hook called when state changes (for UI updates, notifications, etc.)
     var onStateChange: ((State, State) -> Void)?
+    var boostyCaptureId: UUID?
 
     init(
         detector: any MeetingDetecting = WatchLoop.defaultDetector(),
@@ -281,6 +282,12 @@ class WatchLoop {
             debugLogging: verboseDiagnostics(),
         )
 
+        boostyCaptureId = BoostyUploadQueue.current?.begin(
+            pid: source.appPID,
+            title: title,
+            startedAt: Date(),
+            stagingStem: (recorder as? DualSourceRecorder)?.captureStagingStem,
+        )
         let pid = source.appPID
         activeRecorder = recorder
         update { next in
@@ -332,6 +339,10 @@ class WatchLoop {
     private func finishManualRecording(failure: (any Error)?) {
         var failureMessage: String?
         if let failure {
+            if let captureId = boostyCaptureId {
+                boostyCaptureId = nil
+                BoostyUploadQueue.current?.stopCapture(captureId)
+            }
             logger.error("Failed to stop manual recording: \(failure.localizedDescription, privacy: .public)")
             if !isNothingRecordedAtQuit(failure) { failureMessage = failure.localizedDescription }
         }
@@ -386,6 +397,10 @@ class WatchLoop {
         do {
             try await handleMeeting(meeting)
         } catch {
+            if let captureId = boostyCaptureId {
+                boostyCaptureId = nil
+                BoostyUploadQueue.current?.stopCapture(captureId)
+            }
             if error is CancellationError || isNothingRecordedAtQuit(error) { return true }
             let msg = "Recording error: \(error.localizedDescription)"
             logger.error("\(msg, privacy: .public)")
@@ -429,6 +444,12 @@ class WatchLoop {
             source: source,
             micDeviceUID: micDeviceUID,
             debugLogging: verboseDiagnostics(),
+        )
+        boostyCaptureId = BoostyUploadQueue.current?.begin(
+            pid: source.appPID,
+            title: title,
+            startedAt: Date(),
+            stagingStem: (recorder as? DualSourceRecorder)?.captureStagingStem,
         )
         activeRecorder = recorder
         defer { activeRecorder = nil }
@@ -505,38 +526,6 @@ class WatchLoop {
     }
 
     // MARK: - Helpers
-
-    func enqueueRecording(
-        title: String,
-        appName: String,
-        recording: RecordingResult,
-        trigger: RecordingSidecar.Trigger,
-        participants: [String] = [],
-    ) {
-        if recordOnly() {
-            do {
-                try writeRecordOnlySidecar(
-                    title: title, appName: appName, recording: recording, trigger: trigger, participants: participants,
-                )
-            } catch {
-                reportRecordOnlyFailure(error)
-            }
-            return
-        }
-
-        let job = PipelineJob(
-            meetingTitle: title,
-            appName: appName,
-            mixPath: recording.mixPath,
-            appPath: recording.appPath,
-            micPath: recording.micPath,
-            micDelay: recording.micDelay,
-            participants: participants,
-            meetingStartTime: recording.recordingStartDate,
-        )
-        pipelineQueue?.enqueue(job)
-        logger.info("Enqueued pipeline job for: \(title, privacy: .private)")
-    }
 
     /// Single funnel through which every observable-field mutation flows.
     /// Build the next snapshot, hand it to `apply` to commit only the

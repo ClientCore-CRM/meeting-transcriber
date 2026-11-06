@@ -74,9 +74,11 @@ enum DiarizationProcess {
 
         for i in app.indices {
             app[i].speaker = remoteSpeakerLabel
+            app[i].sourceTrack = "app"
         }
         for i in mic.indices {
             mic[i].speaker = micLabel
+            mic[i].sourceTrack = "mic"
         }
 
         var result = app + mic

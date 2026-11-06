@@ -14,6 +14,13 @@ private let logger = Logger(subsystem: AppPaths.logSubsystem, category: "Speaker
 /// already-gone queue no-ops harmlessly. See `SpeakerNamingSession.delegate`.
 @MainActor
 protocol SpeakerNamingSessionDelegate: AnyObject {
+    func updateBoostySegments(
+        jobID: UUID,
+        run: DiarizationRun?,
+        cachedSegments: [TimestampedSegment]?, // swiftlint:disable:this discouraged_optional_collection
+        isDualSource: Bool,
+        names: [String: String],
+    )
     /// A value copy of the job, or nil if it is no longer tracked.
     func job(withID id: UUID) -> PipelineJob?
     func updateJobState(id: UUID, to newState: JobState, error: String?)

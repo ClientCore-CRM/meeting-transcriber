@@ -42,6 +42,9 @@ class DualSourceRecorder: RecordingProvider {
     private(set) var isRecording = false
     private(set) var recordingStartDate: Date = .distantPast
     private var startTimestamp: String?
+    var captureStagingStem: String? {
+        startTimestamp
+    }
 
     var appLevelDBFS: Double {
         captureSession?.appLevelDBFS ?? -120

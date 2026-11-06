@@ -8,11 +8,12 @@ import Foundation
 /// rebuild instead silently resets whatever it forgot to pass — that is how
 /// the delay shift once dropped `suppressed` and reintroduced the very
 /// duplicates it marks (issue #581).
-struct TimestampedSegment: Codable {
+struct TimestampedSegment: Codable, Sendable {
     var start: TimeInterval // seconds
     var end: TimeInterval // seconds
     var text: String
     var speaker: String = ""
+    var sourceTrack: String?
     /// Set when this microphone segment is the loudspeaker output coming back
     /// through the microphone, i.e. a second copy of something the app track
     /// already carries. Left in place rather than deleted: the words are still
@@ -39,6 +40,7 @@ struct TimestampedSegment: Codable {
         text = try container.decode(String.self, forKey: .text)
         speaker = try container.decodeIfPresent(String.self, forKey: .speaker) ?? ""
         suppressed = try container.decodeIfPresent(Bool.self, forKey: .suppressed) ?? false
+        sourceTrack = try container.decodeIfPresent(String.self, forKey: .sourceTrack)
     }
 }
 
