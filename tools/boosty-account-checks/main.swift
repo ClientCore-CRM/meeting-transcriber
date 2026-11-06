@@ -9,6 +9,8 @@ final class MemoryBoostySecrets: BoostySecretStorage {
     func write(_ data: Data, for key: String) throws { values[key] = data }
     func remove(_ key: String) throws { values.removeValue(forKey: key) }
 }
+enum AccountRestoreFailure: Error { case route, meetingUrl, retiredURL, receiptUrl }
+
 @main struct Checks {
     @MainActor static func main() async throws {
         let suite = "BoostyMultiProbe.\(UUID().uuidString)"
@@ -30,7 +32,7 @@ final class MemoryBoostySecrets: BoostySecretStorage {
         var entry = BoostyUploadEntry(id: id, origin: cc.origin, accountKey: cc.accountKey, title: "Call", startedAt: start, audioHostStart: 12, stagingStem: "stem")
         entry.serverRecordingId = "old-server"
         entry.selectedMeetingId = "old-meeting"
-        entry.meetingURL = "https://zoom.us/j/123"
+        entry.meetingUrl = "https://zoom.us/j/123"
         let old = entry.route
         try entry.retarget(to: rr, at: start.addingTimeInterval(120))
         precondition(entry.id == id && entry.startedAt == start && entry.stagingStem == "stem")
@@ -44,7 +46,12 @@ final class MemoryBoostySecrets: BoostySecretStorage {
         let rrRoute = entry.route
         try entry.retarget(to: cc, at: start.addingTimeInterval(180))
         precondition(entry.route.clientRecordingId != old.clientRecordingId && entry.route.clientRecordingId != rrRoute.clientRecordingId)
+        entry.receiptUrl = "/calls/fixture"
         let roundTrip = try BoostyAPIClient.decoder().decode(BoostyUploadEntry.self, from: BoostyAPIClient.encoder().encode(entry))
+        guard roundTrip.route == entry.route else { throw AccountRestoreFailure.route }
+        guard roundTrip.meetingUrl == entry.meetingUrl else { throw AccountRestoreFailure.meetingUrl }
+        guard roundTrip.retiredCaptures?.first?.meetingUrl == entry.retiredCaptures?.first?.meetingUrl else { throw AccountRestoreFailure.retiredURL }
+        guard roundTrip.receiptUrl == entry.receiptUrl else { throw AccountRestoreFailure.receiptUrl }
         precondition(roundTrip.retiredCaptures?.count == 2)
         entry.captureStoppedAt = start.addingTimeInterval(200)
         do { try entry.retarget(to: rr, at: start); fatalError("retargeted finished capture") } catch {}

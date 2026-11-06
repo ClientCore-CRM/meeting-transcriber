@@ -15,14 +15,14 @@ struct BoostyRetiredCapture: Codable, Sendable, Identifiable {
     let route: BoostyCaptureRoute
     var serverRecordingId: String?
     let meetingId: String?
-    let meetingURL: String?
+    let meetingUrl: String?
     let startedAt: Date
     let stoppedAt: Date
 }
 
 extension BoostyUploadEntry {
     var route: BoostyCaptureRoute {
-        .init(clientRecordingId: routingID ?? id, origin: origin, accountKey: accountKey)
+        .init(clientRecordingId: routingId ?? id, origin: origin, accountKey: accountKey)
     }
 
     mutating func retarget(to credential: BoostyCredential, at date: Date) throws {
@@ -33,12 +33,12 @@ extension BoostyUploadEntry {
             route: route,
             serverRecordingId: serverRecordingId,
             meetingId: selectedMeetingId,
-            meetingURL: meetingURL,
+            meetingUrl: meetingUrl,
             startedAt: startedAt,
             stoppedAt: date,
         ))
         retiredCaptures = retired
-        routingID = UUID()
+        routingId = UUID()
         origin = credential.origin
         accountKey = credential.accountKey
         serverRecordingId = nil
@@ -47,7 +47,7 @@ extension BoostyUploadEntry {
         skipCalendarSelection = false
         stopAcknowledged = nil
         uploadedRevision = nil
-        receiptURL = nil
+        receiptUrl = nil
         failures = 0
         nextAttempt = .distantPast
         botStatus = "Cancelling bot in the selected account…"

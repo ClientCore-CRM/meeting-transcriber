@@ -128,7 +128,7 @@ final class BoostyUploadQueue {
         Task {
             if let pid {
                 let url = await Task.detached(priority: .userInitiated) { MeetingURLReader.read(pid: pid) }.value
-                mutate(id) { $0.meetingURL = url }
+                mutate(id) { $0.meetingUrl = url }
             }
             await requestStart(id)
         }
@@ -235,7 +235,7 @@ final class BoostyUploadQueue {
                 clientRecordingId: route.clientRecordingId,
                 startedAt: entry.startedAt,
                 meetingId: entry.selectedMeetingId,
-                meetingUrl: entry.meetingURL,
+                meetingUrl: entry.meetingUrl,
             )
             let result: BoostyRecordingState = try await client.send(
                 path: "/api/desktop/recordings/start",
@@ -407,7 +407,7 @@ final class BoostyUploadQueue {
             draft.uploadedRevision = revision
             let missing = state.receipt.completeness ?? []
             draft.status = missing.isEmpty ? "Saved in Boosty" : "Saved partially; missing: \(missing.joined(separator: ", "))"
-            draft.receiptURL = state.receipt.url
+            draft.receiptUrl = state.receipt.url
             draft.botStatus = state.botStatus
         }
     }
@@ -432,7 +432,7 @@ extension BoostyUploadQueue {
                             path: "/api/desktop/recordings/start", method: "POST", token: credential.deviceToken,
                             body: BoostyAPIClient.encoder().encode(BoostyStart(
                                 clientRecordingId: retired.id, startedAt: retired.startedAt,
-                                meetingId: retired.meetingId, meetingUrl: retired.meetingURL,
+                                meetingId: retired.meetingId, meetingUrl: retired.meetingUrl,
                             )),
                         )
                         guard UUID(uuidString: started.recordingId) != nil else { throw BoostyError.invalidResponse }

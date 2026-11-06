@@ -110,7 +110,7 @@ final class BoostyMultiAccountTests: XCTestCase {
         )
         entry.serverRecordingId = UUID().uuidString
         entry.selectedMeetingId = "cc-calendar-id"
-        entry.meetingURL = "https://zoom.us/j/123"
+        entry.meetingUrl = "https://zoom.us/j/123"
         entry.rawVideoHostStart = 102
         let old = entry.route
         try entry.retarget(to: rr, at: started.addingTimeInterval(60))
@@ -124,8 +124,15 @@ final class BoostyMultiAccountTests: XCTestCase {
         XCTAssertNil(entry.selectedMeetingId)
         XCTAssertNotEqual(entry.route.clientRecordingId, old.clientRecordingId)
         XCTAssertEqual(entry.retiredCaptures?.first?.meetingId, "cc-calendar-id")
-        let restored = try BoostyAPIClient.decoder().decode(BoostyUploadEntry.self, from: BoostyAPIClient.encoder().encode(entry))
+        entry.receiptUrl = "/calls/fixture"
+        let encoded = try BoostyAPIClient.encoder().encode(entry)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertNotNil(object["routing_id"], "existing snake-case wire key is preserved")
+        let restored = try BoostyAPIClient.decoder().decode(BoostyUploadEntry.self, from: encoded)
         XCTAssertEqual(restored.route, entry.route)
+        XCTAssertEqual(restored.meetingUrl, entry.meetingUrl)
+        XCTAssertEqual(restored.receiptUrl, entry.receiptUrl)
+        XCTAssertEqual(restored.retiredCaptures?.first?.meetingUrl, entry.retiredCaptures?.first?.meetingUrl)
         XCTAssertEqual(restored.retiredCaptures?.first?.route, old)
         let intermediate = entry.route
         try entry.retarget(to: cc, at: started.addingTimeInterval(90))
