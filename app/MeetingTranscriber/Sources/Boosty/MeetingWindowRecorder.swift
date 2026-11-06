@@ -112,7 +112,7 @@ final class MeetingWindowRecorder: NSObject, SCStreamOutput, SCStreamDelegate, @
         guard status == SCFrameStatus.complete.rawValue, let writer, let input else { return }
         guard interruptionPTS == nil else { return }
         guard let identity = windowIdentity, MeetingWindowSelection.continues(expected: identity, current: currentWindow(identity.id)) else {
-            interruptionPTS = lastPTS ?? sampleBuffer.presentationTimeStamp
+            interruptionPTS = sampleBuffer.presentationTimeStamp
             warnings.append("Meeting-window identity changed or could not be verified. Video capture ended before saving changed content.")
             return
         }
@@ -166,7 +166,9 @@ final class MeetingWindowRecorder: NSObject, SCStreamOutput, SCStreamDelegate, @
         // ScreenCaptureKit may stop producing frames for a static window.
         // Repeating the last frame gives the recording its real end time.
         let stopTime = CMTimeMaximum(lastPTS, interruptionPTS ?? end)
-        if let lastFrame, input.isReadyForMoreMediaData {
+        // H.264 requires strictly increasing PTS. An interruption can end exactly
+        // at the last frame; duplicating that timestamp can fail finalization.
+        if let lastFrame, CMTimeCompare(stopTime, lastPTS) > 0, input.isReadyForMoreMediaData {
             var timing = CMSampleTimingInfo(duration: CMTime(value: 1, timescale: 15), presentationTimeStamp: stopTime, decodeTimeStamp: .invalid)
             var copy: CMSampleBuffer?
             if CMSampleBufferCreateCopyWithNewTiming(
