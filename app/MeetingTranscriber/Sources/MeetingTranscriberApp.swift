@@ -179,10 +179,13 @@ struct MeetingTranscriberApp: App {
         )
     }
 
+    private var menuBarAccessibilityLabel: String {
+        guard let account = BoostyConnectionState.shared.activeAccount else { return appState.currentStateLabel }
+        return "\(appState.currentStateLabel), Boosty: \(account.company), \(account.email)"
+    }
+
     private var menuBarLabel: some View {
-        Label {
-            Text(appState.currentStateLabel)
-        } icon: {
+        HStack(spacing: 4) {
             AnimatedMenuBarIcon(
                 badge: appState.currentBadge,
                 permissionOverlay: appState.hasPermissionProblem,
@@ -193,7 +196,9 @@ struct MeetingTranscriberApp: App {
                 micSilentOverlay: appState.micSilentOverlay,
                 appSilentOverlay: appState.appSilentOverlay,
             )
+            BoostyAccountBadge()
         }
+        .accessibilityLabel(menuBarAccessibilityLabel)
         .onReceive(NotificationCenter.default.publisher(for: .autoWatchStart)) { _ in
             if !appState.isWatching {
                 appState.watching.toggleWatching(userInitiated: false)

@@ -54,6 +54,7 @@ struct MenuBarView: View {
     // -warnings-as-errors), failing the build on slower CI hardware. The view
     // order, dividers, and conditionals are unchanged.
     var body: some View {
+        BoostyAccountMenu(onManageAccounts: onOpenSettings)
         statusHeader
         meetingInfo
         errorInfo

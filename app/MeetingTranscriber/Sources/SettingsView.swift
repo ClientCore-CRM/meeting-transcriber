@@ -30,6 +30,17 @@ struct SettingsView: View {
 
     var body: some View {
         splitView
+            .onAppear { showRequestedBoostySettings() }
+            .onChange(of: BoostyConnectionState.shared.settingsRequested) { _, requested in
+                if requested { showRequestedBoostySettings() }
+            }
+    }
+
+    private func showRequestedBoostySettings() {
+        if BoostyConnectionState.shared.settingsRequested {
+            selection = .boosty
+            BoostyConnectionState.shared.settingsRequested = false
+        }
     }
 
     private var splitView: some View {

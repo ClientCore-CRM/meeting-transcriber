@@ -10,8 +10,40 @@ final class BoostyConnectionState {
     private(set) var credential: BoostyCredential?
     private(set) var status = "Not connected"
     private(set) var isConnecting = false
+    var settingsRequested = false
+    private(set) var accounts: [BoostyAccount] = []
+    var activeAccount: BoostyAccount? {
+        accounts.first { $0.id == credential?.accountKey }
+    }
+
     var uploadEnabled: Bool {
-        didSet { defaults.set(uploadEnabled, forKey: "boosty.uploadEnabled") }
+        get { activeAccount?.uploadEnabled ?? false }
+        set {
+            guard let credential else { return }
+            do {
+                try store.setUploadEnabled(accountKey: credential.accountKey, enabled: newValue)
+                accounts = store.accounts
+            } catch { status = error.localizedDescription }
+        }
+    }
+
+    func credential(for accountKey: String) -> BoostyCredential? {
+        guard accounts.contains(where: { $0.id == accountKey && $0.uploadEnabled }) else { return nil }
+        return store.load(accountKey: accountKey)
+    }
+
+    func selectAccount(_ accountKey: String) {
+        do { try activate(accountKey) } catch { status = "Could not switch account: \(error.localizedDescription)" }
+    }
+
+    private func activate(_ accountKey: String) throws {
+        guard let saved = store.load(accountKey: accountKey) else { throw BoostyError.disconnected }
+        try BoostyUploadQueue.current?.retargetCurrentCaptures(to: saved)
+        try store.activate(accountKey: accountKey)
+        credential = saved
+        origin = saved.origin
+        accounts = store.accounts
+        status = saved.expiresAt > Date() ? "Connected: \(saved.user.email)" : "Connection expired. Reconnect this account."
     }
 
     private let defaults: UserDefaults
@@ -24,7 +56,7 @@ final class BoostyConnectionState {
         let loadedCredential = store.load()
         credential = loadedCredential
         origin = loadedCredential?.origin ?? defaults.string(forKey: "boosty.origin") ?? "https://meets.clientcore.ru"
-        uploadEnabled = defaults.bool(forKey: "boosty.uploadEnabled")
+        accounts = store.accounts
         if let credential { status = "Connected: \(credential.user.email)" }
     }
 
@@ -74,12 +106,10 @@ final class BoostyConnectionState {
                         expiresAt: result.expiresAt,
                         user: result.user,
                     )
-                    try store.save(saved)
-                    credential = saved
-                    origin = client.origin
-                    defaults.set(origin, forKey: "boosty.origin")
-                    uploadEnabled = true
-                    status = "Connected: \(saved.user.email)"
+                    try Task.checkCancellation()
+                    try store.save(saved, makeActive: false)
+                    try activate(saved.accountKey)
+                    defaults.set(client.origin, forKey: "boosty.origin")
                     return
                 } catch BoostyError.http(428) {
                     continue
@@ -103,7 +133,7 @@ final class BoostyConnectionState {
             try await client.disconnect(token: credential.deviceToken)
             try store.deleteActive()
             self.credential = nil
-            uploadEnabled = false
+            accounts = store.accounts
             status = "Disconnected"
         } catch {
             status = "Could not revoke the connection. \(error.localizedDescription)"
