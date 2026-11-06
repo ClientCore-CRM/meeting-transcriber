@@ -336,6 +336,9 @@ final class PipelineController {
     func makeProtocolGenerator() -> (any ProtocolGenerating)? {
         switch settings.protocolProvider {
         #if !APPSTORE
+            case .codexCLI:
+                CodexCLIProtocolGenerator(codexBin: settings.codexBin, language: settings.protocolLanguage)
+
             case .claudeCLI:
                 ClaudeCLIProtocolGenerator(
                     claudeBin: settings.claudeBin,

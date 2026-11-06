@@ -35,6 +35,7 @@ struct OutputSettingsView: View {
     @Bindable var settings: AppSettings
 
     #if !APPSTORE
+        @State private var codexBinaries: [String] = ["codex"]
         @State private var claudeBinaries: [String] = ["claude"]
     #endif
     @State private var testingConnection = false
@@ -109,6 +110,7 @@ struct OutputSettingsView: View {
         .formStyle(.grouped)
         .onAppear {
             #if !APPSTORE
+                codexBinaries = OutputSettingsLogic.mergePickerOptions(available: CodexCLIProtocolGenerator.availableCodexBinaries, selected: settings.codexBin)
                 claudeBinaries = ClaudeCLIProtocolGenerator.availableClaudeBinaries()
             #endif
             refreshCustomPromptState()
@@ -119,6 +121,16 @@ struct OutputSettingsView: View {
     private var providerConfigView: some View { // swiftlint:disable:this attributes
         switch settings.protocolProvider {
         #if !APPSTORE
+            case .codexCLI:
+                Picker("Codex CLI", selection: $settings.codexBin) {
+                    ForEach(codexBinaries, id: \.self) { bin in
+                        Text(bin).tag(bin)
+                    }
+                }
+                Text("Uses your existing Codex login. Transcripts are sent to the model selected by Codex for summary generation.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
             case .claudeCLI:
                 Picker("Claude CLI", selection: $settings.claudeBin) {
                     ForEach(claudeBinaries, id: \.self) { bin in

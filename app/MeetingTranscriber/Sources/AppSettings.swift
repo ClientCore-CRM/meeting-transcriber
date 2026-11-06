@@ -82,6 +82,7 @@ enum DiarizerMode: String, CaseIterable, Codable {
 enum ProtocolProvider: String, CaseIterable {
     #if !APPSTORE
         case claudeCLI
+        case codexCLI
     #endif
     case openAICompatible
     case none // swiftlint:disable:this discouraged_none_name
@@ -90,6 +91,8 @@ enum ProtocolProvider: String, CaseIterable {
         switch self {
         #if !APPSTORE
             case .claudeCLI: "Claude CLI"
+
+            case .codexCLI: "Codex CLI"
         #endif
 
         case .openAICompatible: "OpenAI-Compatible API"
@@ -475,6 +478,10 @@ final class AppSettings {
     ]
 
     #if !APPSTORE
+        var codexBin: String {
+            didSet { defaults.set(codexBin, forKey: "codexBin") }
+        }
+
         var claudeBin: String {
             didSet { defaults.set(claudeBin, forKey: "claudeBin") }
         }
@@ -636,6 +643,7 @@ final class AppSettings {
             protocolProvider = storedProvider ?? .openAICompatible
         #else
             protocolProvider = storedProvider ?? .claudeCLI
+            codexBin = defaults.string(forKey: "codexBin") ?? CodexCLIProtocolGenerator.availableCodexBinaries.first ?? "codex"
             claudeBin = defaults.object(forKey: "claudeBin") as? String ?? "claude"
         #endif
         protocolLanguage = defaults.string(forKey: "protocolLanguage") ?? "German"
