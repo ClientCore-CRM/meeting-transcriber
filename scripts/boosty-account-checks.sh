@@ -19,5 +19,6 @@ swiftc -target arm64-apple-macos14.2 -swift-version 6 -warnings-as-errors \
   app/MeetingTranscriber/Sources/Boosty/MeetingMediaAssembler.swift \
   app/MeetingTranscriber/Sources/Boosty/BoostyExportBuilder.swift \
   app/MeetingTranscriber/Sources/Boosty/BoostyFileHash.swift \
+  app/MeetingTranscriber/Tests/DefaultsSuite.swift \
   tools/boosty-account-checks/main.swift -o "$check_binary"
 "$check_binary"
