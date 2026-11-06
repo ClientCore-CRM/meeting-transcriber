@@ -3,6 +3,18 @@ import Foundation
 import XCTest
 
 final class AudioCaptureResultTests: XCTestCase {
+    func testResultCarriesActualTrackOriginsForVideoAlignment() {
+        let result = AudioCaptureResult.make(
+            appOutputURL: URL(fileURLWithPath: "/tmp/app.raw"), micOutputURL: URL(fileURLWithPath: "/tmp/mic.wav"),
+            configured: (sampleRate: 16000, channels: 1),
+            app: .init(firstFrameTicks: secondsToMachTicks(12), sampleRate: 16000, channels: 1),
+            mic: .init(recorded: true, firstFrameTicks: secondsToMachTicks(10)),
+        )
+        XCTAssertEqual(result.appHostStart ?? 0, 12, accuracy: 0.0001)
+        XCTAssertEqual(result.micHostStart ?? 0, 10, accuracy: 0.0001)
+        XCTAssertEqual(result.micDelay, -2, accuracy: 0.0001)
+    }
+
     func testFieldsStored() {
         let appURL = URL(fileURLWithPath: "/tmp/app.raw")
         let micURL = URL(fileURLWithPath: "/tmp/mic.wav")

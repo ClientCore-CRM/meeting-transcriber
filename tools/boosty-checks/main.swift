@@ -27,6 +27,14 @@ final class FixtureURLProtocol: URLProtocol, @unchecked Sendable {
 @main
 struct BoostyChecks {
     static func main() async throws {
+        precondition(MeetingWindowSelection.continues(expected: .init(id: 7, pid: 1, title: "Meet"),
+                                                        current: .init(id: 7, pid: 1, title: "Mail")) == false)
+        precondition(MeetingWindowSelection.continues(expected: .init(id: 7, pid: 1, title: "Meet"),
+                                                        current: .init(id: 7, pid: 1, title: "Meet")))
+        precondition(BoostyUploadPolicy.waitForValidation(serverRevision: 1, status: "validating", desiredRevision: 2))
+        precondition(MeetingCaptureClock.audioOrigin(app: 12, mic: 10, appLoaded: true, micLoaded: true) == 10)
+        precondition(MeetingCaptureClock.audioOrigin(app: 12, mic: 10, appLoaded: true, micLoaded: false) == 12)
+        precondition(MeetingCaptureClock.audioOrigin(app: nil, mic: nil, appLoaded: true, micLoaded: false) == nil)
         do {
             _ = try BoostyAPIClient(origin: "http://meets.clientcore.ru")
             fatalError("HTTP installation accepted")
@@ -132,6 +140,13 @@ struct BoostyChecks {
         precondition(abs(outputDuration - 4) < 0.2, "Media assembly changed the original audio timeline")
         let contract = try BoostyAPIClient.encoder().encode(snapshot.manifest)
         try contract.write(to: URL(fileURLWithPath: "/private/tmp/boosty-export-contract.json"), options: .atomic)
+        // A readable duration does not guarantee an exportable fragmented movie.
+        var damaged = entry
+        damaged.video = CapturedMeetingVideo(path: directory.appendingPathComponent("missing.mp4"), hostStart: 11, duration: 3, warnings: [])
+        let partial = try await BoostyExportBuilder.build(entry: damaged, segments: segments, summary: "Summary", audio: audio,
+                                                         destination: (revision: 2, directory: directory))
+        precondition(partial.manifest.files.map(\.kind) == ["audio"], "Bad video must not block processed results")
+        precondition(!partial.manifest.captureWarnings.isEmpty)
         print("Boosty checks passed: HTTPS, PKCE, redirect isolation, API decoding, speaker identities, durable queue and actual MP4 assembly")
     }
 }

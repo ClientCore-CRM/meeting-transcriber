@@ -73,7 +73,7 @@ final class BoostyUploadQueue {
         let connection = BoostyConnectionState.shared
         guard worker != nil, storageError == nil, connection.uploadEnabled, let credential = connection.credential else { return nil }
         let id = UUID()
-        let hostStart = CMClockGetTime(CMClockGetHostTimeClock()).seconds
+        let hostStart: Double? = nil
         let entry = BoostyUploadEntry(
             id: id,
             origin: credential.origin,
@@ -116,8 +116,8 @@ final class BoostyUploadQueue {
         return id
     }
 
-    func stopCapture(_ id: UUID) {
-        mutate(id) { $0.captureStoppedAt = Date() }
+    func stopCapture(_ id: UUID, audioHostStart: Double? = nil) {
+        mutate(id) { $0.captureStoppedAt = Date(); $0.audioHostStart = audioHostStart }
         Task { await observeCapture(id) }
         videoStops[id] = Task { [weak self] in
             guard let self else { return }
@@ -303,7 +303,7 @@ final class BoostyUploadQueue {
                     draft.failures = min(draft.failures + 1, 10)
                     draft.status = "Upload pending: \(error.localizedDescription)"
                     switch error {
-                    case BoostyError.http(409), BoostyError.http(422): draft.nextAttempt = .distantFuture
+                    case BoostyError.resultConflict, BoostyError.http(422): draft.nextAttempt = .distantFuture
                     default: draft.nextAttempt = Date().addingTimeInterval(min(300, pow(2, Double(draft.failures)) * 5))
                     }
                 }
@@ -323,12 +323,12 @@ final class BoostyUploadQueue {
         let path = "/api/desktop/recordings/\(serverId)"
         var state: BoostyRecordingState = try await client.send(path: path, token: credential.deviceToken)
         mutate(id) { $0.botStatus = state.botStatus }
-        if state.sourceRevision == snapshot.revision && state.importStatus == "validating" { return }
+        if BoostyUploadPolicy.waitForValidation(serverRevision: state.sourceRevision, status: state.importStatus, desiredRevision: snapshot.revision) { return }
         if state.receipt.sourceRevision == snapshot.revision && ["uploaded", "partial"].contains(state.importStatus) {
             acceptReceipt(id, revision: snapshot.revision, state: state)
             return
         }
-        if state.importStatus == "conflict" { throw BoostyError.http(409) }
+        if state.importStatus == "conflict" { throw BoostyError.resultConflict }
         if state.importStatus == "failed", state.receipt.errorCode == 422 { throw BoostyError.http(422) }
         let _: BoostyManifestAccepted = try await client.send(
             path: path + "/manifest",

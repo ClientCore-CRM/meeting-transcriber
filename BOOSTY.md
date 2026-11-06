@@ -13,3 +13,7 @@ The durable upload queue keeps immutable media copies, resumes missing 8 MiB par
 Pilot builds are ad-hoc signed, not notarized. Full live verification (scheduled bot, joined bot, video/audio alignment and restart during upload) is required before distributing to employees.
 
 Inherited publishing, release, automation and scheduled workflows are archived with `.disabled` suffixes in this pilot branch. The only active workflow runs tests and produces a private-to-the-run build artifact; it does not publish a release or deploy.
+
+Window identity is checked before accepting video frames: window ID, owner PID and title must remain unchanged. A title change or missing identity ends video and marks the import incomplete; audio continues. Use a dedicated meeting window for browser calls. Live browser/tab/minimize behavior must still be checked on an unlocked Mac.
+
+The audio/video timebase comes from actual first-buffer hardware timestamps propagated by AudioTapLib. Interrupted recordings without a verified audio origin omit video rather than shift the transcript. An unreadable movie cannot block the audio, transcript or summary import.

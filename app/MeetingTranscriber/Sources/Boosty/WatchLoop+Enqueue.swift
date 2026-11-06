@@ -13,7 +13,7 @@ extension WatchLoop {
     ) {
         let capturedId = boostyCaptureId
         boostyCaptureId = nil
-        if let capturedId { BoostyUploadQueue.current?.stopCapture(capturedId) }
+        if let capturedId { BoostyUploadQueue.current?.stopCapture(capturedId, audioHostStart: recording.audioHostStart) }
         if recordOnly() {
             if let capturedId { BoostyUploadQueue.current?.markRecordOnly(capturedId) }
             do {

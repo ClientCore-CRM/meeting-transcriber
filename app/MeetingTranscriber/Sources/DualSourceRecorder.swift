@@ -18,6 +18,7 @@ struct RecordingResult {
     /// Not derived from `systemUptime` (which doesn't advance during sleep, so
     /// a meeting spanning a sleep would skew the anchor) — this is exact.
     let recordingStartDate: Date
+    var audioHostStart: Double?
 }
 
 /// The format `buildRecording` should expect the app track to arrive in, passed

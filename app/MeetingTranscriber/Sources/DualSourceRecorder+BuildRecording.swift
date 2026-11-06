@@ -252,6 +252,12 @@ extension DualSourceRecorder {
             micPath: micPath,
             micDelay: normalisation.reportedDelay,
             recordingStartDate: recordingStartDate,
+            audioHostStart: MeetingCaptureClock.audioOrigin(
+                app: captureResult.appHostStart,
+                mic: captureResult.micHostStart,
+                appLoaded: appPath != nil,
+                micLoaded: micPath != nil,
+            ),
         )
     }
 

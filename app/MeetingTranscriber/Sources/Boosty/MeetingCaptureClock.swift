@@ -7,6 +7,11 @@ struct MeetingWindowCandidate: Sendable {
 }
 
 enum MeetingWindowSelection {
+    static func continues(expected: MeetingWindowCandidate, current: MeetingWindowCandidate?) -> Bool {
+        guard let current else { return false }
+        return !expected.title.isEmpty && current.id == expected.id && current.pid == expected.pid && current.title == expected.title
+    }
+
     static func automatic(_ windows: [MeetingWindowCandidate], pid: Int32, title: String) -> UInt32? {
         let owned = windows.filter { $0.pid == pid }
         let exact = owned.filter { $0.title == title }
@@ -24,6 +29,10 @@ enum MeetingCaptureClock {
         let duration: Double
     }
 
+    static func audioOrigin(app: Double?, mic: Double?, appLoaded: Bool, micLoaded: Bool) -> Double? {
+        [appLoaded ? app : nil, micLoaded ? mic : nil].compactMap(\.self).min()
+    }
+
     static func layout(videoStart: Double, audioStart: Double, videoDuration: Double, audioDuration: Double) -> Layout {
         let delta = videoStart - audioStart
         let offset = max(0, delta)
@@ -33,5 +42,12 @@ enum MeetingCaptureClock {
             sourceStart: sourceStart,
             duration: max(0, min(videoDuration - sourceStart, audioDuration - offset)),
         )
+    }
+}
+
+enum BoostyUploadPolicy {
+    static func waitForValidation(serverRevision: Int, status: String, desiredRevision: Int) -> Bool {
+        // Any in-flight revision owns the server row until verification completes.
+        status == "validating" && serverRevision <= desiredRevision
     }
 }

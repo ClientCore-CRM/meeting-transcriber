@@ -27,6 +27,7 @@ enum MeetingVideoError: Error, LocalizedError {
 /// stream stopping before finalizing the writer on that same queue.
 final class MeetingWindowRecorder: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
     private let frameQueue = DispatchQueue(label: "ru.clientcore.boosty.window-video")
+    private var windowIdentity: MeetingWindowCandidate?
     private var stream: SCStream?
     private var writer: AVAssetWriter?
     private var input: AVAssetWriterInput?
@@ -70,6 +71,8 @@ final class MeetingWindowRecorder: NSObject, SCStreamOutput, SCStreamDelegate, @
     func start(windowID: CGWindowID) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
         guard let window = content.windows.first(where: { $0.windowID == windowID }) else { throw MeetingVideoError.noWindow }
+        guard let owner = window.owningApplication, let title = window.title, !title.isEmpty else { throw MeetingVideoError.noWindow }
+        windowIdentity = .init(id: window.windowID, pid: owner.processID, title: title)
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let configuration = SCStreamConfiguration()
         let scale = min(1, min(1920 / window.frame.width, 1080 / window.frame.height))
@@ -107,6 +110,12 @@ final class MeetingWindowRecorder: NSObject, SCStreamOutput, SCStreamDelegate, @
             if !warnings.contains(warning) { warnings.append(warning) }
         }
         guard status == SCFrameStatus.complete.rawValue, let writer, let input else { return }
+        guard interruptionPTS == nil else { return }
+        guard let identity = windowIdentity, MeetingWindowSelection.continues(expected: identity, current: currentWindow(identity.id)) else {
+            interruptionPTS = lastPTS ?? sampleBuffer.presentationTimeStamp
+            warnings.append("Meeting-window identity changed or could not be verified. Video capture ended before saving changed content.")
+            return
+        }
         let pts = sampleBuffer.presentationTimeStamp
         if firstPTS == nil {
             guard writer.startWriting() else { warnings.append("Video writer could not start."); return }
@@ -121,6 +130,14 @@ final class MeetingWindowRecorder: NSObject, SCStreamOutput, SCStreamDelegate, @
         } else if warnings.isEmpty {
             warnings.append("Some meeting-window frames could not be saved.")
         }
+    }
+
+    private func currentWindow(_ id: CGWindowID) -> MeetingWindowCandidate? {
+        guard let windows = CGWindowListCopyWindowInfo(.optionIncludingWindow, id) as? [[String: Any]],
+              let info = windows.first,
+              let title = info[kCGWindowName as String] as? String,
+              let pid = info[kCGWindowOwnerPID as String] as? Int32 else { return nil }
+        return .init(id: id, pid: pid, title: title)
     }
 
     func stream(_: SCStream, didStopWithError _: any Error) {
