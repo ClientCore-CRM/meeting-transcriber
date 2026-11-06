@@ -27,7 +27,7 @@ protocol UpdateProviding: Sendable {
 struct GitHubReleaseProvider: UpdateProviding {
     /// Not `private` — `AboutSettingsView`'s GitHub link is built from the same
     /// two constants, so the repo identity has a single home.
-    static let owner = "pasrom"
+    static let owner = "ClientCore-CRM"
     static let repo = "meeting-transcriber"
 
     private struct GitHubRelease: Codable {
