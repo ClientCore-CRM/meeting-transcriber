@@ -15,6 +15,8 @@ public struct AudioCaptureResult: Sendable {
     public let actualChannels: Int
     /// Time delta between app and mic first frames (seconds, positive = mic started later).
     public let micDelay: TimeInterval
+    public var appHostStart: Double?
+    public var micHostStart: Double?
 
     /// A `public` struct's synthesized memberwise init is only `internal`, so
     /// other modules can't construct one — declare it `public` to complete the
@@ -68,12 +70,15 @@ extension AudioCaptureResult {
         if mic.recorded, app.firstFrameTicks > 0, mic.firstFrameTicks > 0 {
             micDelay = machTicksToSeconds(mic.firstFrameTicks) - machTicksToSeconds(app.firstFrameTicks)
         }
-        return AudioCaptureResult(
+        var result = AudioCaptureResult(
             appAudioFileURL: appOutputURL,
             micAudioFileURL: mic.recorded ? micOutputURL : nil,
             actualSampleRate: app.sampleRate > 0 ? app.sampleRate : configured.sampleRate,
             actualChannels: app.channels > 0 ? app.channels : configured.channels,
             micDelay: micDelay,
         )
+        result.appHostStart = app.firstFrameTicks > 0 ? machTicksToSeconds(app.firstFrameTicks) : nil
+        result.micHostStart = mic.recorded && mic.firstFrameTicks > 0 ? machTicksToSeconds(mic.firstFrameTicks) : nil
+        return result
     }
 }

@@ -35,29 +35,31 @@ enum BoostyExportBuilder {
         let duration = try await AVURLAsset(url: audioCopy).load(.duration).seconds
         var files = ["audio": audioCopy]
         var warnings = entry.warnings
-        if let captured = entry.video {
-            let assembled = directory.appendingPathComponent("video-\(revision).mp4")
-            if !FileManager.default.fileExists(atPath: assembled.path) {
-                let staged = directory.appendingPathComponent(UUID().uuidString + ".mp4")
-                defer { try? FileManager.default.removeItem(at: staged) }
-                _ = try await MeetingMediaAssembler.assemble(
-                    video: captured,
-                    audio: audioCopy,
-                    audioHostStart: entry.audioHostStart,
-                    output: staged,
-                )
-                try FileManager.default.moveItem(at: staged, to: assembled)
+        if let captured = entry.video, let audioHostStart = entry.audioHostStart {
+            do {
+                let assembled = directory.appendingPathComponent("video-\(revision).mp4")
+                if !FileManager.default.fileExists(atPath: assembled.path) {
+                    let staged = directory.appendingPathComponent(UUID().uuidString + ".mp4")
+                    defer { try? FileManager.default.removeItem(at: staged) }
+                    _ = try await MeetingMediaAssembler.assemble(
+                        video: captured,
+                        audio: audioCopy,
+                        audioHostStart: audioHostStart,
+                        output: staged,
+                    )
+                    try FileManager.default.moveItem(at: staged, to: assembled)
+                }
+                files["video"] = assembled
+                warnings += captured.warnings
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                warnings.append("Meeting-window video could not be assembled; processed results and audio were preserved.")
             }
-            files["video"] = assembled
-            warnings += captured.warnings
+        } else if entry.video != nil {
+            warnings.append("Recovered audio has no verified capture clock; video was omitted to preserve transcript timing.")
         }
-        var descriptors: [BoostyManifest.File] = []
-        for kind in files.keys.sorted() {
-            guard let file = files[kind] else { throw BoostyError.invalidResponse }
-            let result = try checksum(file)
-            guard result.size <= 4 * 1024 * 1024 * 1024 else { throw BoostyError.http(413) }
-            descriptors.append(.init(kind: kind, size: result.size, sha256: result.hash))
-        }
+        let descriptors = try descriptors(for: files)
         let manifest = try BoostyExportPolicy.manifest(
             segments: segments,
             summary: summary,
@@ -77,5 +79,16 @@ enum BoostyExportBuilder {
             files: files,
             fingerprint: BoostyExportPolicy.fingerprint(segments: segments, summary: summary),
         )
+    }
+
+    private static func descriptors(for files: [String: URL]) throws -> [BoostyManifest.File] {
+        var descriptors: [BoostyManifest.File] = []
+        for kind in files.keys.sorted() {
+            guard let file = files[kind] else { throw BoostyError.invalidResponse }
+            let result = try checksum(file)
+            guard result.size <= 4 * 1024 * 1024 * 1024 else { throw BoostyError.http(413) }
+            descriptors.append(.init(kind: kind, size: result.size, sha256: result.hash))
+        }
+        return descriptors
     }
 }

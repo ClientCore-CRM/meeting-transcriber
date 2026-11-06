@@ -51,7 +51,7 @@ struct BoostyUploadEntry: Codable, Sendable, Identifiable {
     let accountKey: String
     let title: String
     let startedAt: Date
-    let audioHostStart: Double
+    var audioHostStart: Double?
     var serverRecordingId: String?
     var selectedMeetingId: String?
     var candidates: [BoostyCandidate] = []

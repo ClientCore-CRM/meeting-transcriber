@@ -7,6 +7,7 @@ enum BoostyError: Error, LocalizedError {
     case http(Int)
     case invalidResponse
     case keychain(Int32)
+    case resultConflict
     case disconnected
 
     var errorDescription: String? {
@@ -15,6 +16,7 @@ enum BoostyError: Error, LocalizedError {
         case let .http(code): "Boosty request failed (HTTP \(code))."
         case .invalidResponse: "Boosty returned an invalid response."
         case let .keychain(code): "Could not save the Boosty connection in Keychain (\(code))."
+        case .resultConflict: "Results were edited in Boosty. Resolve the conflict before retrying."
         case .disconnected: "Connect your Boosty account in Settings."
         }
     }
