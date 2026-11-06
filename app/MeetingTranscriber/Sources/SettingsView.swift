@@ -87,6 +87,9 @@ struct SettingsView: View {
         case .output:
             OutputSettingsView(settings: settings)
 
+        case .boosty:
+            BoostySettingsView()
+
         case .advanced:
             AdvancedSettingsView(settings: settings)
 
@@ -97,7 +100,7 @@ struct SettingsView: View {
 }
 
 private enum SettingsTab: String, CaseIterable, Identifiable {
-    case general, audio, transcription, speakers, output, advanced, about
+    case general, audio, transcription, speakers, output, boosty, advanced, about
 
     var id: String {
         rawValue
@@ -110,6 +113,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .transcription: "Transcription"
         case .speakers: "Speakers"
         case .output: "Output"
+        case .boosty: "Boosty"
         case .advanced: "Advanced"
         case .about: "About"
         }
@@ -122,6 +126,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .transcription: "waveform"
         case .speakers: "person.2"
         case .output: "doc.text"
+        case .boosty: "icloud.and.arrow.up"
         case .advanced: "wrench.and.screwdriver"
         case .about: "info.circle"
         }

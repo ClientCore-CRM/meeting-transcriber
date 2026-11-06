@@ -59,6 +59,14 @@ extension SpeakerNamingSession {
             speakingTimes: namingData.speakingTimes,
         )
 
+        delegate.updateBoostySegments(
+            jobID: jobID,
+            run: nil,
+            cachedSegments: nil,
+            isDualSource: namingData.isDualSource,
+            names: fullMapping,
+        )
+
         if let transcriptPath = job.transcriptPath {
             do {
                 var transcript = try String(contentsOf: transcriptPath, encoding: .utf8)
@@ -380,6 +388,13 @@ extension SpeakerNamingSession {
         // recording-level note, so the rendering is handed it again. `note` has
         // no default, so this caller cannot forget it the way a rule about
         // write sites could.
+        delegate?.updateBoostySegments(
+            jobID: jobID,
+            run: run,
+            cachedSegments: cachedSegments,
+            isDualSource: isDualSource,
+            names: autoNames,
+        )
         guard let delegate, let rebuilt = delegate.renderLabeledTranscript(
             run: run, cachedSegments: cachedSegments,
             isDualSource: isDualSource, autoNames: autoNames,

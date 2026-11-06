@@ -67,6 +67,14 @@ final class NamingSessionMockDelegate: SpeakerNamingSessionDelegate {
         throw DiarizationError.notAvailable
     }
 
+    func updateBoostySegments(
+        jobID _: UUID,
+        run _: DiarizationRun?,
+        cachedSegments _: [TimestampedSegment]?, // swiftlint:disable:this discouraged_optional_collection
+        isDualSource _: Bool,
+        names _: [String: String],
+    ) {}
+
     func renderLabeledTranscript(
         run _: DiarizationRun, cachedSegments _: [TimestampedSegment],
         isDualSource _: Bool, autoNames _: [String: String], note _: String?,

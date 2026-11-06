@@ -1,0 +1,23 @@
+name: Boosty desktop checks
+on:
+  push:
+    branches: [codex/boosty-upload]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mac:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test app without model downloads
+        run: swift test --package-path app/MeetingTranscriber --parallel --skip ModelPreloadTests
+      - name: Build pilot app
+        run: bash scripts/build_release.sh --no-notarize --version=0.1.0-boosty-pilot
+      - uses: actions/upload-artifact@v7
+        with:
+          name: MeetingTranscriber-Boosty-pilot
+          path: .build/release/MeetingTranscriber.dmg
+          retention-days: 14

@@ -91,6 +91,7 @@ struct MeetingTranscriberApp: App {
     private var openWindow
 
     init() {
+        BoostyUploadQueue.shared.resume()
         // Built first, as the property initialiser it replaces was. Handed to
         // the application delegate here because `init` runs before the run
         // loop, so every quit request finds it, however early it comes and

@@ -123,6 +123,9 @@ struct PipelineJob: Identifiable, Codable {
     var echo: EchoDetectionDTO?
     var transcriptPath: URL?
     var protocolPath: URL?
+    var boostyCaptureId: UUID?
+    var boostySegments: [BoostyExportSegment]? // swiftlint:disable:this discouraged_optional_collection
+    var boostySummary: String?
     var namingSlug: String?
     // Output policy captured when this job enters the queue. Optional so
     // snapshots saved before transcript-output options existed still decode.

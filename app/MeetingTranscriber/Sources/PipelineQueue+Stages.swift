@@ -197,6 +197,7 @@ extension PipelineQueue {
             defer { try? FileManager.default.removeItem(at: workDir) }
 
             let transcription = try await transcribe(ctx, engine: engine, workDir: workDir)
+            cacheBoostyFallback(jobID: ctx.jobID, cached: transcription.cachedSegments)
 
             // The transcript WITHOUT its recording-level note. A dropped track
             // renders that one line even when the surviving track produced no
@@ -585,7 +586,7 @@ extension PipelineQueue {
 
             if let labeled = try await labeledTranscript(
                 from: run, autoNames: autoNames, transcription: transcription,
-                engine: engine, mix16k: mix16k,
+                engine: engine, input: (mix16k: mix16k, jobID: ctx.jobID),
             ) {
                 finalTranscript = labeled
             }
@@ -753,7 +754,7 @@ extension PipelineQueue {
     /// unchanged. The topologies share the merge + format tail, applied once here.
     private func labeledTranscript(
         from run: DiarizationRun, autoNames: [String: String],
-        transcription: TranscriptionOutput, engine: any TranscribingEngine, mix16k: URL,
+        transcription: TranscriptionOutput, engine: any TranscribingEngine, input: (mix16k: URL, jobID: UUID),
     ) async throws -> String? {
         // cachedSegments is set by the transcribe stage in practice; the
         // single-source branch re-transcribes defensively if it's somehow nil.
@@ -763,9 +764,16 @@ extension PipelineQueue {
         } else if transcription.isDualSource {
             return nil
         } else {
-            let rawSegments = try await engine.transcribeSegments(audioPath: mix16k)
+            let rawSegments = try await engine.transcribeSegments(audioPath: input.mix16k)
             cachedSegments = normalize(rawSegments, with: transcription.terminologyNormalizer)
         }
+        updateBoostySegments(
+            jobID: input.jobID,
+            run: run,
+            cachedSegments: cachedSegments,
+            isDualSource: transcription.isDualSource,
+            names: autoNames,
+        )
         return renderLabeledTranscript(
             run: run, cachedSegments: cachedSegments,
             isDualSource: transcription.isDualSource, autoNames: autoNames,
@@ -781,10 +789,11 @@ extension PipelineQueue {
     /// identically. Returns nil when the run carries no usable diarization.
     /// Internal (not private) because it is a `SpeakerNamingSessionDelegate`
     /// witness.
-    func renderLabeledTranscript(
-        run: DiarizationRun, cachedSegments: [TimestampedSegment],
-        isDualSource: Bool, autoNames: [String: String], note: String?,
-    ) -> String? {
+    func labelingTopology(
+        run: DiarizationRun,
+        cachedSegments: [TimestampedSegment],
+        isDualSource: Bool,
+    ) -> DiarizationProcess.LabelingTopology? {
         // Suppressed copies leave before anything gets a speaker. Left in,
         // they would be labeled like real speech and merged into adjacent
         // same-speaker blocks, where the trailing `transcriptText` filter can
@@ -812,6 +821,14 @@ extension PipelineQueue {
             return nil
         }
         guard let topology else { return nil }
+        return topology
+    }
+
+    func renderLabeledTranscript(
+        run: DiarizationRun, cachedSegments: [TimestampedSegment],
+        isDualSource: Bool, autoNames: [String: String], note: String?,
+    ) -> String? {
+        guard let topology = labelingTopology(run: run, cachedSegments: cachedSegments, isDualSource: isDualSource) else { return nil }
         let labeled = DiarizationProcess.labelSegments(topology, autoNames: autoNames)
         return DiarizationProcess.mergeConsecutiveSpeakers(labeled).transcriptText(note: note)
     }
@@ -915,6 +932,7 @@ extension PipelineQueue {
     func generateProtocol(
         jobID: UUID, transcript: String, title: String, protocolsDir: URL,
     ) async {
+        if let index = jobs.firstIndex(where: { $0.id == jobID }) { jobs[index].boostySummary = nil }
         guard let protocolGeneratorFactory, let generator = protocolGeneratorFactory() else {
             return
         }
@@ -975,6 +993,7 @@ extension PipelineQueue {
             logger.info("[\(shortID, privacy: .public)] protocol_saved file=\(mdPath.lastPathComponent, privacy: .private)")
             if let idx = jobs.firstIndex(where: { $0.id == jobID }) {
                 jobs[idx].protocolPath = mdPath
+                jobs[idx].boostySummary = protocolMD
             }
         } catch {
             // Private, unlike the generation failure above: a file-write

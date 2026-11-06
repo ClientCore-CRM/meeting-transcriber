@@ -487,6 +487,9 @@ class PipelineQueue {
 
     func enqueue(_ inputJob: PipelineJob) {
         var job = inputJob
+        if job.boostyCaptureId == nil {
+            job.boostyCaptureId = BoostyUploadQueue.current?.matchingCapture(mixPath: job.mixPath)
+        }
         stampTranscriptOutputOptions(on: &job)
         jobs.append(job)
         eventLog.append(jobID: job.id, event: "enqueued", from: nil, to: job.state)
@@ -669,6 +672,10 @@ class PipelineQueue {
             jobs[index].namingStartedAt = Date()
         }
         if newState == .done {
+            let job = jobs[index]
+            if let captureId = job.boostyCaptureId, let segments = job.boostySegments, let audio = job.mixPath {
+                BoostyUploadQueue.current?.prepare(captureId: captureId, segments: segments, summary: job.boostySummary, audio: audio)
+            }
             removeRawTranscriptArtifactsIfSafe(for: index)
         } else if newState == .error,
                   !transcriptOutputOptions(forJobID: id).saveRawTranscriptSeparately,
