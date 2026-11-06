@@ -1,6 +1,8 @@
 # Meeting Transcriber
 
-> **The local-first meeting transcriber for macOS.** Records Teams, Zoom, and Webex calls, transcribes them on-device with Whisper / Parakeet, separates speakers, and turns the result into a Markdown protocol using your own Claude CLI or any local LLM. **No cloud. No subscription. No audio ever leaves your Mac.**
+> **ClientCore Boosty pilot fork.** For optional automatic uploads of processed meetings and meeting-window video, start with [BOOSTY.md](BOOSTY.md). Use the [pilot CI build](https://github.com/ClientCore-CRM/meeting-transcriber/actions/runs/42229832786) or build this fork from source.
+
+> **The local-first meeting transcriber for macOS.** Records Teams, Zoom, and Webex calls, transcribes them on-device with Whisper / Parakeet, separates speakers, and turns the result into a Markdown protocol using your own Claude CLI or any local LLM. **Processing stays local. Boosty uploads are opt-in.**
 
 <p align="center">
   <img src="docs/hero.gif" alt="Meeting Transcriber turning a Teams call into a Markdown protocol on-device" width="860">

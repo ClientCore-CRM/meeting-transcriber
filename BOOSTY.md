@@ -17,3 +17,5 @@ Inherited publishing, release, automation and scheduled workflows are archived w
 Window identity is checked before accepting video frames: window ID, owner PID and title must remain unchanged. A title change or missing identity ends video and marks the import incomplete; audio continues. Use a dedicated meeting window for browser calls. Live browser/tab/minimize behavior must still be checked on an unlocked Mac.
 
 The audio/video timebase comes from actual first-buffer hardware timestamps propagated by AudioTapLib. Interrupted recordings without a verified audio origin omit video rather than shift the transcript. An unreadable movie cannot block the audio, transcript or summary import.
+
+Verification: full app XCTest and packaging passed on Xcode 27.0 in [pilot CI](https://github.com/ClientCore-CRM/meeting-transcriber/actions/runs/42229832786). The downloaded arm64 DMG passed image checksum/signature checks and its bundled synthetic audio self-test on the target Mac. Actions is disabled again and the default branch is main. Real meeting/window acceptance remains tracked in Multica XNA1D-662.
