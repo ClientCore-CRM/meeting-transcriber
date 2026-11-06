@@ -2,7 +2,7 @@
 
 > **ClientCore Boosty pilot fork.** For optional automatic uploads of processed meetings and meeting-window video, start with [BOOSTY.md](BOOSTY.md). Build this fork from source for the latest pilot, including the hardware capture fixes.
 
-> **The local-first meeting transcriber for macOS.** Records Teams, Zoom, and Webex calls, transcribes them on-device with Whisper / Parakeet, separates speakers, and turns the result into a Markdown protocol using your own Claude CLI or any local LLM. **Processing stays local. Boosty uploads are opt-in.**
+> **The local-first meeting transcriber for macOS.** Records Teams, Zoom, and Webex calls, transcribes them on-device with Whisper / Parakeet, separates speakers, and turns the result into a Markdown protocol using Codex CLI, Claude CLI, or a local LLM. **Speech recognition stays local. The chosen summary provider receives the transcript; Boosty uploads are opt-in.**
 
 <p align="center">
   <img src="docs/hero.gif" alt="Meeting Transcriber turning a Teams call into a Markdown protocol on-device" width="860">
@@ -21,14 +21,14 @@
 
 Cloud meeting recorders (Otter, Fireflies, Granola, tl;dv) work great, until you remember that every word from every meeting goes to a third-party server. For a lot of teams (legal, healthcare, M&A, anything under NDA, or just folks who'd rather not) that's a non-starter.
 
-Meeting Transcriber runs the entire pipeline (recording, transcription, speaker diarization, summarization) on your Mac. No account, no upload, no monthly bill.
+Meeting Transcriber records, transcribes, and separates speakers on your Mac. Summaries can use a local LLM or your selected cloud provider. This fork can optionally upload audio, meeting-window video, transcript and summary to your Boosty installation.
 
 |                                | Cloud transcribers | **Meeting Transcriber** |
 |--------------------------------|:------------------:|:-----------------------:|
-| Audio leaves your machine      | Yes                | **No**                  |
-| Recurring cost                 | $10–30 / month     | **Free**                |
-| Works offline                  | No                 | **Yes**                 |
-| Choice of summarization LLM    | Vendor-locked      | **Claude · Ollama · LM Studio · any OpenAI API** |
+| Audio leaves your machine      | Yes                | **Only with optional Boosty uploads** |
+| Recurring cost                 | $10–30 / month     | **Depends on your summary provider** |
+| Works offline                  | No                 | **Recording/ASR and local-LLM summaries** |
+| Choice of summarization LLM    | Vendor-locked      | **Codex · Claude · Ollama · LM Studio · any OpenAI API** |
 | Per-source speaker separation  | Mixed track        | **Dual-track diarization** |
 | Source available               | No                 | **MIT licensed**        |
 
@@ -57,7 +57,7 @@ flowchart TD
     D1["WhisperKit<br/>99 languages"]
     D2["Parakeet TDT v3<br/>25 EU languages"]
     E["Speaker Diarization<br/>FluidAudio · dual-track + recognition"]
-    F["Protocol Generation<br/>Claude CLI · OpenAI-compatible · none"]
+    F["Protocol Generation<br/>Codex CLI · Claude CLI · OpenAI-compatible · none"]
     G["Markdown Protocol<br/>Summary · Decisions · Tasks · Transcript"]
 
     A --> B
@@ -94,7 +94,7 @@ flowchart TD
 - **Echo bleed handling** — On loudspeaker recordings, remote voices picked up by the microphone are detected automatically and reported. Two optional remedies, both off by default: acoustic echo cancellation removes the bleed from the microphone audio itself, and a transcript dedup leaves the duplicated lines out. The dedup is off because it can mistake a quiet remark made over the far end for echo and drop it
 - **Speaker recognition** — Voice embeddings stored across meetings, matched via cosine similarity
 - **VAD preprocessing** — Optional silence trimming via FluidAudio Silero v6 before transcription, with automatic timestamp remapping
-- **AI protocol generation** — Structured Markdown via [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code), OpenAI-compatible APIs (Ollama, LM Studio, etc.), or disabled (save transcript only)
+- **AI protocol generation** — Structured Markdown via Codex CLI, [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code), OpenAI-compatible APIs (Ollama, LM Studio, etc.), or disabled (save transcript only)
 - **Configurable protocol prompt** — Custom prompt file support (`~/Library/Application Support/MeetingTranscriber/protocol_prompt.md`) with `{LANGUAGE}`, `{MEETING_DATE}` (`YYYY-MM-DD`), and `{MEETING_TIME}` (`HH:mm`) variables; recordings include authoritative metadata, while imports and recovery jobs resolve time placeholders to `Unknown`
 - **Manual recording** — Record any app via app picker, not just detected meetings
 - **Multi-format input** — Supports WAV, MP3, M4A, MP4, FLAC, plus the phone and messenger voice formats AMR, 3GP/3G2 and OPUS/OGG; MKV and WebM additionally need ffmpeg
@@ -111,6 +111,7 @@ flowchart TD
 
 - macOS 14.2+ (required for CATapDescription audio capture)
 - **One of:**
+  - Codex CLI — installed and logged in (`codex login`); the ChatGPT macOS bundled CLI is also discovered
   - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) — installed and logged in (`claude --version`)
   - An OpenAI-compatible API endpoint (e.g. [Ollama](https://ollama.com), LM Studio, llama.cpp) — configure in Settings
 
@@ -255,7 +256,7 @@ Open Settings via the menu bar item or ⌘,.
 | **Audio** | Microphone device, voice activity detection (VAD), per-channel silence indicator, echo cancellation (off by default) |
 | **Transcribe** | ASR engine (WhisperKit / Parakeet) and per-engine options (model, language, custom vocabulary), terminology normalization rules, live caption overlay (PoC) |
 | **Speakers** | Diarization, mic speaker name, known voices, recognition stats |
-| **Output** | LLM provider (Claude CLI / OpenAI-compatible / none), transcript-retention options, protocol language, output folder, custom prompt |
+| **Output** | LLM provider (Codex CLI / Claude CLI / OpenAI-compatible / none), transcript-retention options, protocol language, output folder, custom prompt |
 | **Advanced** | Permissions status, diagnostics, version info |
 
 ---
