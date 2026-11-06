@@ -48,11 +48,17 @@ final class BoostyConnectionState {
 
     private let defaults: UserDefaults
     private let store: BoostyCredentials
+    private let makeClient: (String) throws -> BoostyAPIClient
     private var connectionTask: Task<Void, Never>?
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        secrets: any BoostySecretStorage = BoostyKeychainSecrets(),
+        makeClient: @escaping (String) throws -> BoostyAPIClient = { try BoostyAPIClient(origin: $0) },
+    ) {
         self.defaults = defaults
-        store = BoostyCredentials(defaults: defaults)
+        self.makeClient = makeClient
+        store = BoostyCredentials(defaults: defaults, secrets: secrets)
         let loadedCredential = store.load()
         credential = loadedCredential
         origin = loadedCredential?.origin ?? defaults.string(forKey: "boosty.origin") ?? "https://meets.clientcore.ru"
@@ -73,7 +79,7 @@ final class BoostyConnectionState {
     private func performConnection() async {
         defer { isConnecting = false }
         do {
-            let client = try BoostyAPIClient(origin: origin)
+            let client = try makeClient(origin)
             let pkce = BoostyPKCE.make()
             struct Start: Encodable { let challenge: String }
             let pending: BoostyConnection = try await client.send(
@@ -129,12 +135,18 @@ final class BoostyConnectionState {
         connectionTask?.cancel()
         guard let credential else { return }
         do {
-            let client = try BoostyAPIClient(origin: credential.origin)
+            let client = try makeClient(credential.origin)
             try await client.disconnect(token: credential.deviceToken)
-            try store.deleteActive()
-            self.credential = nil
+            // Revoke/remove the captured grant, never whatever account the user selected while waiting.
+            // A newer grant for this same account may also have been connected in the meantime.
+            if store.load(accountKey: credential.accountKey)?.deviceId == credential.deviceId {
+                try store.remove(accountKey: credential.accountKey)
+            }
             accounts = store.accounts
-            status = "Disconnected"
+            if self.credential?.accountKey == credential.accountKey, self.credential?.deviceId == credential.deviceId {
+                self.credential = nil
+                status = "Disconnected"
+            }
         } catch {
             status = "Could not revoke the connection. \(error.localizedDescription)"
         }

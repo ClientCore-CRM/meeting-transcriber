@@ -13,7 +13,7 @@ final class MemoryBoostySecrets: BoostySecretStorage {
     @MainActor static func main() async throws {
         let suite = "BoostyMultiProbe.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
+        defer { DefaultsSuite.remove(suite) }
         let secrets = MemoryBoostySecrets()
         let cc = BoostyCredential(origin: "https://meets.clientcore.ru", deviceToken: "secret-cc", deviceId: "cc", expiresAt: .distantFuture, user: .init(id: 1, email: "cc@example.test", name: "CC"))
         let rr = BoostyCredential(origin: "https://boosty.retailrocket.ru", deviceToken: "secret-rr", deviceId: "rr", expiresAt: .distantFuture, user: .init(id: 1, email: "rr@example.test", name: "RR"))
@@ -51,6 +51,7 @@ final class MemoryBoostySecrets: BoostySecretStorage {
         try store.remove(accountKey: rr.accountKey)
         precondition(store.load(accountKey: cc.accountKey) != nil && store.load(accountKey: rr.accountKey) == nil)
         try await checkQueueIsolation(cc: cc, rr: rr)
+        try await checkDelayedDisconnect(cc: cc, rr: rr)
         print("MULTI_ACCOUNT_ROUTING_CHECK_PASSED")
     }
 }
@@ -62,16 +63,22 @@ final class AccountFixtureNetwork: @unchecked Sendable {
     private var held: [AccountFixtureURLProtocol] = []
     private var requests: [URLRequest] = []
     private var holdsCC = true
+    private var heldDelete: AccountFixtureURLProtocol?
     let ccID = UUID().uuidString
     let rrID = UUID().uuidString
 
     var history: [URLRequest] { lock.withLock { requests } }
+    var hasHeldDelete: Bool { lock.withLock { heldDelete != nil } }
     var hasHeldStart: Bool { lock.withLock { !held.isEmpty } }
 
     func receive(_ transport: AccountFixtureURLProtocol) {
         let request = transport.request
         let hold = lock.withLock {
             requests.append(request)
+            if request.httpMethod == "DELETE" {
+                heldDelete = transport
+                return true
+            }
             if holdsCC, request.url?.host == "meets.clientcore.ru", request.url?.path.hasSuffix("/start") == true {
                 held.append(transport)
                 return true
@@ -79,6 +86,15 @@ final class AccountFixtureNetwork: @unchecked Sendable {
             return false
         }
         if !hold { transport.finish(response(for: request)) }
+    }
+
+    func releaseDelete() {
+        let pending = lock.withLock {
+            let value = heldDelete
+            heldDelete = nil
+            return value
+        }
+        pending?.finish(Data(), status: 204)
     }
 
     func releaseStarts() {
@@ -124,8 +140,8 @@ final class AccountFixtureURLProtocol: URLProtocol, @unchecked Sendable {
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() { AccountFixtureNetwork.shared.receive(self) }
     override func stopLoading() {}
-    func finish(_ data: Data) {
-        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+    func finish(_ data: Data, status: Int = 200) {
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
     }
@@ -184,4 +200,42 @@ final class AccountFixtureURLProtocol: URLProtocol, @unchecked Sendable {
     precondition(network.history.filter { $0.url?.path.hasSuffix("/manifest") == true }.allSatisfy { $0.url?.host == "boosty.retailrocket.ru" })
     precondition(network.history.filter { $0.url?.host == "meets.clientcore.ru" }.allSatisfy { !$0.url!.path.contains("/files/") })
     print("LIVE_QUEUE_STALE_RESPONSE_AND_INACTIVE_UPLOAD_PASSED")
+}
+
+
+@MainActor private func checkDelayedDisconnect(cc: BoostyCredential, rr: BoostyCredential) async throws {
+    let suite = "BoostyDisconnectProbe.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { DefaultsSuite.remove(suite) }
+    let secrets = MemoryBoostySecrets()
+    let store = BoostyCredentials(defaults: defaults, secrets: secrets)
+    try store.save(cc)
+    try store.save(rr, makeActive: false)
+    let connection = BoostyConnectionState(defaults: defaults, secrets: secrets) { origin in
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AccountFixtureURLProtocol.self]
+        return try BoostyAPIClient(origin: origin, session: URLSession(configuration: configuration))
+    }
+    let network = AccountFixtureNetwork.shared
+    let request = Task { await connection.disconnect() }
+    try await eventually { network.hasHeldDelete }
+    connection.selectAccount(rr.accountKey)
+    network.releaseDelete()
+    await request.value
+    precondition(connection.credential?.accountKey == rr.accountKey, "delayed CC disconnect cleared selected RR")
+    precondition(store.load(accountKey: rr.accountKey) != nil, "delayed CC disconnect deleted RR grant")
+    precondition(store.load(accountKey: cc.accountKey) == nil, "revoked CC grant remained registered")
+    // Reconnecting the same account while its older grant is being revoked also preserves the replacement.
+    try store.save(cc)
+    connection.selectAccount(cc.accountKey)
+    let secondRequest = Task { await connection.disconnect() }
+    try await eventually { network.hasHeldDelete }
+    let replacement = BoostyCredential(origin: cc.origin, deviceToken: "replacement-cc", deviceId: "new-cc-device", expiresAt: .distantFuture, user: cc.user)
+    try store.save(replacement)
+    connection.selectAccount(cc.accountKey)
+    network.releaseDelete()
+    await secondRequest.value
+    precondition(connection.credential?.deviceId == replacement.deviceId)
+    precondition(store.load(accountKey: cc.accountKey)?.deviceId == replacement.deviceId)
+    print("DELAYED_DISCONNECT_ACCOUNT_SCOPE_PASSED")
 }
