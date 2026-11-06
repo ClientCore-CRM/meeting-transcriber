@@ -15,9 +15,10 @@ jobs:
       - name: Test app without model downloads
         run: swift test --package-path app/MeetingTranscriber --parallel --skip ModelPreloadTests
       - name: Build pilot app
-        run: bash scripts/build_release.sh --no-notarize --version=0.1.0-boosty-pilot
+        run: bash scripts/build_release.sh --no-notarize
       - uses: actions/upload-artifact@v7
         with:
           name: MeetingTranscriber-Boosty-pilot
-          path: .build/release/MeetingTranscriber.dmg
+          path: .build/release/MeetingTranscriber-*.dmg
+          if-no-files-found: error
           retention-days: 14
