@@ -4,15 +4,26 @@ on:
     branches: [codex/boosty-upload]
   pull_request:
   workflow_dispatch:
+concurrency:
+  group: boosty-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   mac:
     runs-on: xcode-27
     timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     steps:
       - uses: actions/checkout@v7
-      - name: Test app without model downloads
+      - name: Prewarm existing speech models sequentially
+        timeout-minutes: 20
+        run: swift test --package-path app/MeetingTranscriber --filter ModelPreloadTests
+      - name: Fetch echo-cancellation model
+        run: echo "MEETINGTRANSCRIBER_LOCALVQE_MODEL=$(bash scripts/fetch-localvqe-model.sh)" >> "$GITHUB_ENV"
+      - name: Test app
+        timeout-minutes: 18
         run: swift test --package-path app/MeetingTranscriber --parallel --skip ModelPreloadTests
       - name: Build pilot app
         run: bash scripts/build_release.sh --no-notarize
